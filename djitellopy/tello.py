@@ -67,12 +67,6 @@ class Tello:
     state_field_converters = {key : int for key in INT_STATE_FIELDS}
     state_field_converters.update({key : float for key in FLOAT_STATE_FIELDS})
 
-    # VideoCapture object
-    cap: Optional[cv2.VideoCapture] = None
-    background_frame_read: Optional['BackgroundFrameRead'] = None
-
-    stream_on = False
-    is_flying = False
 
     def __init__(self,
                  host=TELLO_IP,
@@ -104,6 +98,13 @@ class Tello:
         drones[host] = {'responses': [], 'state': {}}
 
         self.LOGGER.info("Tello instance was initialized. Host: '{}'. Port: '{}'.".format(host, Tello.CONTROL_UDP_PORT))
+
+        # VideoCapture object
+        self.cap: Optional[cv2.VideoCapture] = None
+        self.background_frame_read: Optional['BackgroundFrameRead'] = None
+        
+        self.stream_on = False
+        self.is_flying = False
 
     def get_own_udp_object(self):
         """Get own object from the global drones dict. This object is filled
