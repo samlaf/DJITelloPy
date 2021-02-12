@@ -1,5 +1,6 @@
 import cv2
 from djitellopy import Tello
+import time
 
 class VideoStreamBackend:
 
@@ -11,15 +12,20 @@ class VideoStreamBackend:
             self.name = "VideoStream{}".format(VideoStreamBackend.count)
             VideoStreamBackend.count += 1
     
-    def callback(self, img):
+    def __call__(self, img):
         if self.size is not None:
             img = cv2.resize(img, self.size)
         cv2.imshow(self.name, img)
+        cv2.waitKey(1)
 
 if __name__ == "__main__":
     tello = Tello()
-    vsb1 = VideoStreamBackend()
-    vsb2 = VideoStreamBackend()
-    #tello.add_video_callback(vsb1.callback)
     tello.connect()
-    #tello.streamon()
+    print(tello.get_battery())
+    vsb1 = VideoStreamBackend()
+    vsb2 = VideoStreamBackend(size=(320,240))
+    tello.add_video_callback(vsb1)
+    tello.add_video_callback(vsb2)
+    tello.streamon()
+    time.sleep(30)
+    tello.end()

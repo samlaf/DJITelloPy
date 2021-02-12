@@ -107,4 +107,3 @@ if __name__ == "__main__":
     tello.connect()
     controller = CLIController(tello)
     controller.thread.join()
-    tello.end()

@@ -909,6 +909,9 @@ class BackgroundFrameRead:
     def __init__(self, address):
         self.address = address
         self.callbacks = []
+        self.stopped = False
+        self.cap = None
+        self.worker = Thread(target=self.update_frame, args=(), daemon=True)
 
     def add_video_callback(self, fct):
         self.callbacks.append(fct)
@@ -926,8 +929,6 @@ class BackgroundFrameRead:
         if not self.grabbed or self.frame is None:
             raise Exception('Failed to grab first frame from video stream')
 
-        self.stopped = False
-        self.worker = Thread(target=self.update_frame, args=(), daemon=True)
         self.worker.start()
 
     def update_frame(self):
@@ -939,8 +940,8 @@ class BackgroundFrameRead:
                 self.stop()
             else:
                 self.grabbed, self.frame = self.cap.read()
-                # for cb in self.callbacks:
-                #     cb(self.frame)
+                for cb in self.callbacks:
+                    cb(self.frame)
 
     def stop(self):
         """Stop the frame update worker
@@ -949,4 +950,5 @@ class BackgroundFrameRead:
         if self.cap is not None:
             self.cap.release()
         self.stopped = True
-        self.worker.join()
+        if self.worker.is_alive():
+            self.worker.join()
