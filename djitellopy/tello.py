@@ -7,6 +7,7 @@ import socket
 import time
 from threading import Thread
 from typing import Optional, Union, Type, Dict
+import warnings
 
 import cv2 # type: ignore
 from .enforce_types import enforce_types
@@ -99,9 +100,8 @@ class Tello:
 
         self.LOGGER.info("Tello instance was initialized. Host: '{}'. Port: '{}'.".format(host, Tello.CONTROL_UDP_PORT))
 
-        # VideoCapture object
-        self.cap: Optional[cv2.VideoCapture] = None
-        self.background_frame_read: Optional['BackgroundFrameRead'] = None
+        address = self.get_udp_video_address()
+        self.background_frame_read = BackgroundFrameRead(address)
         
         self.stream_on = False
         self.is_flying = False
@@ -141,6 +141,7 @@ class Tello:
     @staticmethod
     def udp_state_receiver():
         """Setup state UDP receiver. This method listens for state information from
+        self.background_frame_read = BackgroundFrameRead(self, address)  # also sets self.cap
         Tello. Must be run from a background thread in order to not block
         the main thread.
         Internal method, you normally wouldn't call this yourself.
@@ -379,21 +380,6 @@ class Tello:
         address = address_schema.format(ip=self.VS_UDP_IP, port=self.VS_UDP_PORT)
         return address
 
-    def get_video_capture(self):
-        """Get the VideoCapture object from the camera drone.
-        Users usually want to use get_frame_read instead.
-        Returns:
-            VideoCapture
-        """
-
-        if self.cap is None:
-            self.cap = cv2.VideoCapture(self.get_udp_video_address())
-
-        if not self.cap.isOpened():
-            self.cap.open(self.get_udp_video_address())
-
-        return self.cap
-
     def get_frame_read(self) -> 'BackgroundFrameRead':
         """Get the BackgroundFrameRead object from the camera drone. Then, you just need to call
         backgroundFrameRead.frame to get the actual frame received by the drone.
@@ -401,10 +387,11 @@ class Tello:
             BackgroundFrameRead
         """
         if self.background_frame_read is None:
-            address = self.get_udp_video_address()
-            self.background_frame_read = BackgroundFrameRead(self, address)  # also sets self.cap
-            self.background_frame_read.start()
+            warnings.warn("streamon needs to be called in order to initialize the BackgroundFrameRead.")
         return self.background_frame_read
+
+    def add_video_callback(self, fct):
+        self.background_frame_read.add_video_callback(fct)
 
     def send_command_with_return(self, command: str, timeout: int = RESPONSE_TIMEOUT) -> str:
         """Send command to Tello and wait for its response.
@@ -557,6 +544,7 @@ class Tello:
         """
         self.send_control_command("streamon")
         self.stream_on = True
+        self.background_frame_read.start()
 
     def streamoff(self):
         """Turn off video streaming.
@@ -903,8 +891,6 @@ class Tello:
             self.streamoff()
         if self.background_frame_read is not None:
             self.background_frame_read.stop()
-        if self.cap is not None:
-            self.cap.release()
 
         host = self.address[0]
         if host in drones:
@@ -920,13 +906,21 @@ class BackgroundFrameRead:
     backgroundFrameRead.frame to get the current frame.
     """
 
-    def __init__(self, tello, address):
-        tello.cap = cv2.VideoCapture(address)
+    def __init__(self, address):
+        self.address = address
+        self.callbacks = []
 
-        self.cap = tello.cap
+    def add_video_callback(self, fct):
+        self.callbacks.append(fct)
+
+    def start(self):
+        """Start the frame update worker
+        Internal method, you normally wouldn't call this yourself.
+        """
+        self.cap = cv2.VideoCapture(self.address)
 
         if not self.cap.isOpened():
-            self.cap.open(address)
+            self.cap.open(self.address)
 
         self.grabbed, self.frame = self.cap.read()
         if not self.grabbed or self.frame is None:
@@ -934,11 +928,6 @@ class BackgroundFrameRead:
 
         self.stopped = False
         self.worker = Thread(target=self.update_frame, args=(), daemon=True)
-
-    def start(self):
-        """Start the frame update worker
-        Internal method, you normally wouldn't call this yourself.
-        """
         self.worker.start()
 
     def update_frame(self):
@@ -950,10 +939,14 @@ class BackgroundFrameRead:
                 self.stop()
             else:
                 self.grabbed, self.frame = self.cap.read()
+                # for cb in self.callbacks:
+                #     cb(self.frame)
 
     def stop(self):
         """Stop the frame update worker
         Internal method, you normally wouldn't call this yourself.
         """
+        if self.cap is not None:
+            self.cap.release()
         self.stopped = True
         self.worker.join()
