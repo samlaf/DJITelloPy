@@ -102,8 +102,111 @@ class KeyboardCommandController(Controller):
             time.sleep(1/self.FPS)
         pygame.display.quit()
 
+class KeyboardVelocityController(Controller):
+
+    def __init__(self, tello, FPS=120, speed=50):
+        self.tello = tello
+        self.FPS = FPS
+        self.speed = speed
+        tello.set_speed(speed)
+        self.is_flying = False
+        
+        # Drone velocities between -100~100
+        self.for_back_velocity = 0
+        self.left_right_velocity = 0
+        self.up_down_velocity = 0
+        self.yaw_velocity = 0
+
+        pygame.init()
+        self.screen = pygame.display.set_mode([480, 320])
+
+        super().__init__()
+
+    def command_parser(self):
+
+        should_stop = False
+        while not should_stop:
+            for event in pygame.event.get():
+                if (event.type == pygame.QUIT or
+                    (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE)):
+                    should_stop = True
+                elif event.type == pygame.KEYDOWN:
+                    self.keydown(event.key)
+                elif event.type == pygame.KEYUP:
+                    self.keyup(event.key)
+            
+            if self.is_flying:
+                self.tello.send_rc_control(self.left_right_velocity, 
+                                            self.for_back_velocity,
+                                            self.up_down_velocity, 
+                                            self.yaw_velocity)
+            time.sleep(1 / self.FPS)
+
+    def keydown(self, key):
+        """ Update velocities based on key pressed
+        Arguments:
+            key: pygame key
+        """
+        if key == pygame.K_UP:  # set forward velocity
+            self.for_back_velocity = self.speed
+        elif key == pygame.K_DOWN:  # set backward velocity
+            self.for_back_velocity = -self.speed
+        elif key == pygame.K_LEFT:  # set left velocity
+            self.left_right_velocity = -self.speed
+        elif key == pygame.K_RIGHT:  # set right velocity
+            self.left_right_velocity = self.speed
+        elif key == pygame.K_w:  # set up velocity
+            self.up_down_velocity = self.speed
+        elif key == pygame.K_s:  # set down velocity
+            self.up_down_velocity = -self.speed
+        elif key == pygame.K_a:  # set yaw counter clockwise velocity
+            self.yaw_velocity = -self.speed
+        elif key == pygame.K_d:  # set yaw clockwise velocity
+            self.yaw_velocity = self.speed
+    
+    def keyup(self, key):
+        """ Update velocities based on key released
+        Arguments:
+            key: pygame key
+        """
+        if key == pygame.K_UP or key == pygame.K_DOWN:  # set zero forward/backward velocity
+            self.for_back_velocity = 0
+        elif key == pygame.K_LEFT or key == pygame.K_RIGHT:  # set zero left/right velocity
+            self.left_right_velocity = 0
+        elif key == pygame.K_w or key == pygame.K_s:  # set zero up/down velocity
+            self.up_down_velocity = 0
+        elif key == pygame.K_a or key == pygame.K_d:  # set zero yaw velocity
+            self.yaw_velocity = 0
+        elif key == pygame.K_t:  # takeoff
+            self.tello.takeoff()
+            self.is_flying = True
+        elif key == pygame.K_l:  # land
+            not self.tello.land()
+            self.is_flying = False
+        elif key == pygame.K_1:
+            self.speed = 10
+        elif key == pygame.K_2:
+            self.speed = 20
+        elif key == pygame.K_3:
+            self.speed = 30
+        elif key == pygame.K_4:
+            self.speed = 40
+        elif key == pygame.K_5:
+            self.speed = 50
+        elif key == pygame.K_6:
+            self.speed = 60
+        elif key == pygame.K_7:
+            self.speed = 70
+        elif key == pygame.K_8:
+            self.speed = 80
+        elif key == pygame.K_9:
+            self.speed = 90
+        elif key == pygame.K_0:
+            self.speed = 100
+
 if __name__ == "__main__":
     tello = Tello()
     tello.connect()
-    controller = CLIController(tello)
+    print(tello.get_battery())
+    controller = KeyboardVelocityController(tello)
     controller.thread.join()
