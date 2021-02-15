@@ -3,6 +3,7 @@ import abc
 import threading
 import time
 import logging
+import pygame, pygame.display, pygame.font, pygame.color
 
 class MissionPads(abc.ABC):
 
@@ -23,7 +24,13 @@ class MissionPadsPrinter(MissionPads):
         # front cam doesn't seem to work for me...
         tello.set_mission_pad_detection_direction(cam_direction)
         self.tello = tello
-        tello.LOGGER.setLevel(logging.WARNING)
+
+        if pygame.display.get_active():
+            self.screen = pygame.display.get_surface()
+        else:
+            pygame.init()
+            self.screen = pygame.display.set_mode([480,320])
+
         super().__init__()
 
     def mission(self):
@@ -32,7 +39,12 @@ class MissionPadsPrinter(MissionPads):
             x = self.tello.get_mission_pad_distance_x()
             y = self.tello.get_mission_pad_distance_y()
             z = self.tello.get_mission_pad_distance_z()
-            print(f"Current position: ({x},{y},{z}) on mission pad {pad}.")
+            text = f"Mission Pad: {pad}\nPos: ({x},{y},{z})"
+            myfont = pygame.font.Font(pygame.font.get_default_font(), 100)
+            black = pygame.color.THECOLORS['green']
+            surf = pygame.font.Font.render(myfont, text, True, black)
+            self.screen.blit(surf, (0,0))
+            #pygame.display.update()
             time.sleep(1)
     
 if __name__ == "__main__":

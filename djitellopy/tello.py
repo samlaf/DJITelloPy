@@ -85,14 +85,14 @@ class Tello:
             # Run Tello command responses UDP receiver on background
             client_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             client_socket.bind(('', Tello.CONTROL_UDP_PORT))
-            response_receiver_thread = Thread(target=Tello.udp_response_receiver)
-            response_receiver_thread.daemon = True
-            response_receiver_thread.start()
+            self.response_receiver_thread = Thread(target=Tello.udp_response_receiver)
+            self.response_receiver_thread.daemon = True
+            self.response_receiver_thread.start()
 
             # Run state UDP receiver on background
-            state_receiver_thread = Thread(target=Tello.udp_state_receiver)
-            state_receiver_thread.daemon = True
-            state_receiver_thread.start()
+            self.state_receiver_thread = Thread(target=Tello.udp_state_receiver)
+            self.state_receiver_thread.daemon = True
+            self.state_receiver_thread.start()
 
             threads_initialized = True
 

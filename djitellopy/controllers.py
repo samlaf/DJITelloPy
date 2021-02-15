@@ -7,7 +7,7 @@ Here we implement different controllers that send commands to the Tello:
 import abc
 import threading
 import time
-import pygame
+import pygame, pygame.display
 from djitellopy import Tello
 
 class Controller(abc.ABC):
@@ -67,8 +67,11 @@ class KeyboardCommandController(Controller):
     def __init__(self, tello, FPS=120):
         self.tello = tello
         self.FPS = FPS
-        pygame.init()
-        self.screen = pygame.display.set_mode([480,320])
+        if pygame.display.get_active():
+            self.screen = pygame.display.get_surface()
+        else:
+            pygame.init()
+            self.screen = pygame.display.set_mode([480,320])
         super().__init__()
 
     def command_parser(self):
@@ -117,8 +120,11 @@ class KeyboardVelocityController(Controller):
         self.up_down_velocity = 0
         self.yaw_velocity = 0
 
-        pygame.init()
-        self.screen = pygame.display.set_mode([480, 320])
+        if pygame.display.get_active():
+            self.screen = pygame.display.get_surface()
+        else:
+            pygame.init()
+            self.screen = pygame.display.set_mode([480,320])
 
         super().__init__()
 
