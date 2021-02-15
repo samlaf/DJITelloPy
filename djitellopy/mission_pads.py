@@ -1,24 +1,11 @@
 from djitellopy import Tello
-import abc
 import threading
 import time
-import logging
 import pygame, pygame.display, pygame.font, pygame.color
 
-class MissionPads(abc.ABC):
-
-    def __init__(self):
-        self.thread = threading.Thread(target = self.mission, daemon=True)
-        self.thread.start()
-
-    @abc.abstractmethod
-    def mission(self):
-        pass
-
-class MissionPadsPrinter(MissionPads):
+class MissionPadsPrinter():
 
     def __init__(self, tello, cam_direction = 0):
-        tello = Tello()
         tello.enable_mission_pads()
         # 0 for below cam, 1 for front cam, 2 for both.
         # front cam doesn't seem to work for me...
@@ -30,26 +17,36 @@ class MissionPadsPrinter(MissionPads):
         else:
             pygame.init()
             self.screen = pygame.display.set_mode([480,320])
+        self.surf1 = self.screen
+        self.surf2 = self.screen
+        tello.add_state_callback(self)
 
-        super().__init__()
-
-    def mission(self):
-        while True:
-            pad = self.tello.get_mission_pad_id()
-            x = self.tello.get_mission_pad_distance_x()
-            y = self.tello.get_mission_pad_distance_y()
-            z = self.tello.get_mission_pad_distance_z()
-            text = f"Mission Pad: {pad}\nPos: ({x},{y},{z})"
-            myfont = pygame.font.Font(pygame.font.get_default_font(), 100)
-            black = pygame.color.THECOLORS['green']
-            surf = pygame.font.Font.render(myfont, text, True, black)
-            self.screen.blit(surf, (0,0))
-            #pygame.display.update()
-            time.sleep(1)
+    def __call__(self, datadict):
+        pad = datadict['mid']
+        x = datadict['x']
+        y = datadict['y']
+        z = datadict['z']
+        myfont = pygame.font.Font(pygame.font.get_default_font(), 20)
+        red = pygame.color.THECOLORS['red']
+        line1 = f"Mission Pad: {pad}"
+        self.surf1 = pygame.font.Font.render(myfont, line1, True, red)
+        line2 = f"Pos: ({x},{y},{z})"
+        self.surf2 = pygame.font.Font.render(myfont, line2, True, red)
     
+    def draw(self):
+        self.screen.blit(self.surf1, (0,0))
+        self.screen.blit(self.surf2, (0,self.surf1.get_height()))
+
+
 if __name__ == "__main__":
     tello = Tello()
     tello.connect()
 
     mpp = MissionPadsPrinter(tello)
-    mpp.thread.join()
+
+    while True:
+        cv = tello.get_cv()
+        with cv:
+            cv.wait()
+            mpp.draw()
+            pygame.display.update()

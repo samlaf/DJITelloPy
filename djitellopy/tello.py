@@ -5,7 +5,7 @@
 import logging
 import socket
 import time
-from threading import Thread
+from threading import Thread, Condition
 from typing import Optional, Union, Type, Dict
 import warnings
 
@@ -90,9 +90,13 @@ class Tello:
             self.response_receiver_thread.start()
 
             # Run state UDP receiver on background
-            self.state_receiver_thread = Thread(target=Tello.udp_state_receiver)
+            self.state_receiver_thread = Thread(target=self.udp_state_receiver)
             self.state_receiver_thread.daemon = True
             self.state_receiver_thread.start()
+            self.state_callbacks = []
+
+            # Condition Variable to notify ui drawer
+            self.cv = Condition()
 
             threads_initialized = True
 
@@ -101,7 +105,7 @@ class Tello:
         self.LOGGER.info("Tello instance was initialized. Host: '{}'. Port: '{}'.".format(host, Tello.CONTROL_UDP_PORT))
 
         address = self.get_udp_video_address()
-        self.background_frame_read = BackgroundFrameRead(address)
+        self.background_frame_read = BackgroundFrameRead(address, self.cv)
         
         self.stream_on = False
         self.is_flying = False
@@ -115,6 +119,12 @@ class Tello:
 
         host = self.address[0]
         return drones[host]
+
+    def add_video_callback(self, f):
+        self.background_frame_read.add_video_callback(f)
+
+    def add_state_callback(self, f):
+        self.state_callbacks.append(f)
 
     @staticmethod
     def udp_response_receiver():
@@ -138,8 +148,7 @@ class Tello:
                 Tello.LOGGER.error(e)
                 break
 
-    @staticmethod
-    def udp_state_receiver():
+    def udp_state_receiver(self):
         """Setup state UDP receiver. This method listens for state information from
         self.background_frame_read = BackgroundFrameRead(self, address)  # also sets self.cap
         Tello. Must be run from a background thread in order to not block
@@ -160,7 +169,13 @@ class Tello:
                     continue
 
                 data = data.decode('ASCII')
-                drones[address]['state'] = Tello.parse_state(data)
+                datadict = Tello.parse_state(data)
+                drones[address]['state'] = datadict
+
+                for f in self.state_callbacks:
+                    with self.cv:
+                        f(datadict)
+                        self.cv.notify()
 
             except Exception as e:
                 Tello.LOGGER.error(e)
@@ -199,6 +214,10 @@ class Tello:
             state_dict[key] = value
 
         return state_dict
+
+    def get_cv(self) -> Condition:
+        """ Returns the tello's condition variable."""
+        return self.cv
 
     def get_current_state(self) -> dict:
         """Call this function to attain the state of the Tello. Returns a dict
@@ -389,9 +408,6 @@ class Tello:
         if self.background_frame_read is None:
             warnings.warn("streamon needs to be called in order to initialize the BackgroundFrameRead.")
         return self.background_frame_read
-
-    def add_video_callback(self, fct):
-        self.background_frame_read.add_video_callback(fct)
 
     def send_command_with_return(self, command: str, timeout: int = RESPONSE_TIMEOUT) -> str:
         """Send command to Tello and wait for its response.
@@ -906,8 +922,9 @@ class BackgroundFrameRead:
     backgroundFrameRead.frame to get the current frame.
     """
 
-    def __init__(self, address):
+    def __init__(self, address, cv):
         self.address = address
+        self.cv = cv
         self.callbacks = []
         self.stopped = False
         self.cap = None
@@ -941,7 +958,9 @@ class BackgroundFrameRead:
             else:
                 self.grabbed, self.frame = self.cap.read()
                 for cb in self.callbacks:
-                    cb(self.frame)
+                    with self.cv:
+                        cb(self.frame)
+                        self.cv.notify()
 
     def stop(self):
         """Stop the frame update worker
